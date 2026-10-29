@@ -1,2 +1,2 @@
 # E-commerce-Data-web-scraper
-Web scraper for 
+Web scraper for E-commerce data
