@@ -1,0 +1,33 @@
+name: Run scraper
+
+on:
+  workflow_dispatch:        # lets you press a Start button
+  schedule:
+    - cron: "0 6 * * *"     # also runs by itself every day
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install tools
+        run: pip install -r requirements.txt
+
+      - name: Run the scraper
+        run: python main.py
+        env:
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+
+      - name: Save the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: products-db
+          path: products.db*
