@@ -25,9 +25,16 @@ jobs:
         env:
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
 
+      - name: Make the Excel file
+        if: always()
+        continue-on-error: true
+        run: python export_csv.py
+
       - name: Save the results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: products-db
-          path: products.db*
+          name: results
+          path: |
+            products.csv
+            products.db*
