@@ -226,6 +226,29 @@ SAMPLE_SITE_CONFIGS: list[dict[str, Any]] = [
             "product_url": {"selector": "h3 > a", "attr": "href"},
         },
     },
+        # --- Practice laptop store (static) -------------------------------------
+    {
+        "name": "webscraper_test_store",
+        "domain": "webscraper.io",
+        "start_urls": [
+            "https://webscraper.io/test-sites/e-commerce/static/computers/laptops"
+        ],
+        "render_javascript": False,
+        "use_proxy": False,
+        "item_selector": "div.thumbnail",
+        "next_page_selector": "ul.pagination a[rel='next']",
+        "max_pages": 3,
+        "currency": "USD",
+        "min_delay_seconds": 1.0,
+        "selectors": {
+            "product_name": {"selector": "a.title", "attr": "title"},
+            "price": {"selector": ["h4.price", ".price"]},
+            "sku": {"selector": "a.title", "attr": "href", "regex": "/product/(\\d+)"},
+            "availability": None,
+            "image_url": {"selector": "img.img-responsive", "attr": "src"},
+            "product_url": {"selector": "a.title", "attr": "href"},
+        },
+    },
     # --- 2. JS-heavy site template (Playwright) ----------------------------------
     # Disabled placeholder showing the JS-engine options; copy and adapt it.
     {
