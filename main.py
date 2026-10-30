@@ -4,7 +4,7 @@ main.py - Entry point: wires config -> request handler -> storage -> engine.
 Usage:
     export SCRAPER_API_KEY="your-key"                      # managed proxy key (optional for the demo site)
     export PROXY_URL_TEMPLATE="http://api.scraperapi.com/?api_key={api_key}&url={url}"
-    python main.py                                         # runs SAMPLE_SITE_CONFIGS
+    python main.py                                         # runs SAMPLE_SITE_CONFIGS + every URL in sites.txt
     python main.py --config sites.json --db products.db --workers 20 --max-concurrency 20
 
 Optional proxy-mode settings for JS sites (Playwright):
@@ -19,7 +19,7 @@ import os
 
 from engine import ScraperEngine
 from request_handler import ProxySettings, RequestHandler, RetryPolicy
-from site_config import SAMPLE_SITE_CONFIGS, load_site_configs
+from site_config import SAMPLE_SITE_CONFIGS, load_site_configs, load_sites_txt
 from storage import SQLiteSink
 
 logger = logging.getLogger("scraper.main")
@@ -44,6 +44,16 @@ def proxy_settings_from_env() -> ProxySettings:
 
 async def run(args: argparse.Namespace) -> None:
     sites = load_site_configs(args.config if args.config else SAMPLE_SITE_CONFIGS)
+
+    # Sites listed as plain URLs in sites.txt are read automatically (no selectors needed).
+    # A site configured by hand above always wins over a sites.txt entry for the same domain.
+    manual_domains = {site.domain for site in sites}
+    for auto_site in load_sites_txt(args.sites_file):
+        if auto_site.domain in manual_domains:
+            logger.info("%s is configured by hand; ignoring its sites.txt entries", auto_site.domain)
+        else:
+            sites.append(auto_site)
+
     if not sites:
         logger.error("No valid, enabled site configs to run")
         return
@@ -63,6 +73,7 @@ async def run(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Config-driven product scraper")
     parser.add_argument("--config", help="Path to a JSON file of site configs (default: built-in samples)")
+    parser.add_argument("--sites-file", default="sites.txt", help="Plain list of URLs to read automatically")
     parser.add_argument("--db", default="products.db", help="SQLite output path")
     parser.add_argument("--workers", type=int, default=20, help="Worker tasks pulling from the queue")
     parser.add_argument("--max-concurrency", type=int, default=20, help="Global in-flight request cap")
