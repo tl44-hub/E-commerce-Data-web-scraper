@@ -28,6 +28,7 @@ class CrawlTask:
     site: SiteConfig
     url: str
     page_no: int = 1
+    follow: bool = True        # False for product pages reached via a listing link (no further crawling)
 
 
 class ScraperEngine:
@@ -115,6 +116,14 @@ class ScraperEngine:
                     site.name, task.page_no, fetched.engine,
                     len(parsed.products), len(parsed.errors), task.url)
 
+        if not task.follow:
+            return                                    # a followed product page: stop here
+
         nxt = parsed.next_page_url
         if nxt and task.page_no < site.max_pages and site.owns_url(nxt):
             self._enqueue(CrawlTask(site, nxt, task.page_no + 1))
+
+        # Listing page whose product links we discovered (auto mode): visit each product once.
+        for link in parsed.follow_urls:
+            if site.owns_url(link) and self._enqueue(CrawlTask(site, link, 1, follow=False)):
+                self.stats["links_followed"] += 1
