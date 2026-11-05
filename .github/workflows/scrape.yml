@@ -30,7 +30,11 @@ jobs:
         run: python main.py
         env:
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-
+      - name: Run the scraper
+        run: python main.py
+        env:
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+          PROXY_URL_TEMPLATE: "https://api.scrape.do/?token={api_key}&url={url}"
       - name: Make the spreadsheets
         if: always()
         continue-on-error: true
