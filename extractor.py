@@ -13,6 +13,7 @@ Fault-tolerance contract (the "automated fallback"):
 
 Two modes:
   * mode "selectors": the site config supplies CSS selectors (the original behaviour).
+  * mode "shopify": reads the shop's public /products.json feed (up to 250 products per request).
   * mode "auto": no selectors needed. Reads schema.org Product data (JSON-LD) that many shops
     embed for Google, falling back to Open Graph product meta tags.
 """
@@ -25,7 +26,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 
@@ -428,7 +429,7 @@ def _extract_auto(soup: BeautifulSoup, site: SiteConfig, page_url: str) -> _Extr
         if meta:
             out.pairs.append(meta)
 
-    if listed_urls and not out.pairs:
+    if listed_urls and not out.pairs and site.follow_links:
         out.follow_urls = list(dict.fromkeys(listed_urls))[:_MAX_FOLLOW_PER_PAGE]
     if not out.pairs and not out.follow_urls:
         out.container_error = ("__structured_data__", _AUTO_LABEL,
@@ -437,15 +438,103 @@ def _extract_auto(soup: BeautifulSoup, site: SiteConfig, page_url: str) -> _Extr
 
 
 # --------------------------------------------------------------------------- #
+# Mode "shopify": the public /products.json feed (many products per request)
+# --------------------------------------------------------------------------- #
+_SHOPIFY_LABEL = "Shopify products.json"
+_SHOPIFY_PAGE_SIZE = 250
+
+
+def _shopify_page(url: str) -> int:
+    try:
+        return max(1, int(parse_qs(urlparse(url).query).get("page", ["1"])[0]))
+    except ValueError:
+        return 1
+
+
+def _with_page(url: str, page: int) -> str:
+    parts = urlparse(url)
+    query = parse_qs(parts.query)
+    query["page"] = [str(page)]
+    return urlunparse(parts._replace(query=urlencode(query, doseq=True)))
+
+
+def _extract_shopify(text: str, site: SiteConfig, page_url: str) -> tuple[_Extraction, str | None]:
+    """One record per product VARIANT (sizes/flavours have their own SKU and price)."""
+    out = _Extraction()
+    try:
+        products = json.loads(text)["products"]
+        if not isinstance(products, list):
+            raise ValueError("products is not a list")
+    except (ValueError, KeyError, TypeError):
+        out.container_error = ("__shopify_feed__", "/products.json",
+                               "not a Shopify product feed (feed disabled, password page, or not a Shopify store)")
+        return out, None
+
+    parts = urlparse(page_url)
+    base = f"{parts.scheme}://{parts.netloc}"
+
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        title = _clean(product.get("title"))
+        handle = _clean(product.get("handle"))
+        images = [img for img in (product.get("images") or []) if isinstance(img, dict)]
+        first_image = _clean(images[0].get("src")) if images else None
+        image_by_id = {img.get("id"): img.get("src") for img in images}
+        variants = [v for v in (product.get("variants") or []) if isinstance(v, dict)] or [{}]
+
+        for variant in variants:
+            record: dict = {name: None for name in ALL_FIELDS}
+            variant_title = _clean(variant.get("title"))
+            if title and variant_title and variant_title.lower() != "default title":
+                record["product_name"] = f"{title} - {variant_title}"
+            else:
+                record["product_name"] = title
+            record["sku"] = _clean(variant.get("sku"))
+
+            image = _clean(image_by_id.get(variant.get("image_id"))) or first_image
+            record["image_url"] = urljoin(page_url, image) if image else None
+            if handle:
+                suffix = f"?variant={variant['id']}" if variant.get("id") and len(variants) > 1 else ""
+                record["product_url"] = f"{base}/products/{handle}{suffix}"
+
+            raw_price = variant.get("price")
+            if raw_price not in (None, ""):
+                try:
+                    record["price"] = _norm_price(str(raw_price), page_url)
+                except FieldExtractionError:
+                    pass
+            record["currency"] = site.currency          # the feed does not include a currency
+            available = variant.get("available")
+            record["availability"] = available if isinstance(available, bool) else None
+
+            failures = [(name, _SHOPIFY_LABEL, "not present in the product feed")
+                        for name in REQUIRED_FIELDS if record[name] is None]
+            out.pairs.append((record, failures))
+
+    if not products and _shopify_page(page_url) == 1:
+        out.container_error = ("__shopify_feed__", "/products.json", "the product feed is empty")
+
+    next_url = None
+    if len(products) >= _SHOPIFY_PAGE_SIZE:             # a full page means there may be more
+        next_url = _with_page(page_url, _shopify_page(page_url) + 1)
+    return out, next_url
+
+
+# --------------------------------------------------------------------------- #
 # Shared page-level logic
 # --------------------------------------------------------------------------- #
 def parse_page(html: str, page_url: str, site: SiteConfig) -> ParseResult:
     """Parse one page into products + aggregated field errors + next-page URL. Synchronous."""
-    soup = BeautifulSoup(html, _PARSER)
     result = ParseResult()
-
-    extraction = (_extract_auto(soup, site, page_url) if site.mode == "auto"
-                  else _extract_with_selectors(soup, site, page_url))
+    soup = None
+    shopify_next = None
+    if site.mode == "shopify":
+        extraction, shopify_next = _extract_shopify(html, site, page_url)
+    else:
+        soup = BeautifulSoup(html, _PARSER)
+        extraction = (_extract_auto(soup, site, page_url) if site.mode == "auto"
+                      else _extract_with_selectors(soup, site, page_url))
 
     if extraction.container_error:
         fname, selector, reason = extraction.container_error
@@ -477,7 +566,7 @@ def parse_page(html: str, page_url: str, site: SiteConfig) -> ParseResult:
             err.site, err.field, err.failed_count, err.total_items, err.url, err.selector, err.reason,
         )
     result.errors.extend(aggregated.values())
-    result.next_page_url = _find_next_page(soup, site, page_url)
+    result.next_page_url = shopify_next if soup is None else _find_next_page(soup, site, page_url)
     result.follow_urls = extraction.follow_urls
     return result
 
