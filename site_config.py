@@ -79,7 +79,7 @@ class SiteConfig:
     domain: str                                   # e.g. "books.toscrape.com" (no scheme / www)
     start_urls: tuple[str, ...]
     fields: dict[str, SelectorSpec | None]        # field name -> spec (None = opted out)
-    mode: str = "selectors"                       # "selectors" = CSS rules below, "auto" = read schema.org structured data
+    mode: str = "selectors"                       # "selectors" = CSS rules, "auto" = schema.org data, "shopify" = /products.json feed
 
     # --- page structure ---------------------------------------------------
     item_selector: str | None = None              # one match per product card; None = whole page is one product
@@ -97,6 +97,7 @@ class SiteConfig:
     scroll_pause_ms: int = 1000                   # pause after each scroll
     click_selectors: tuple[str, ...] = ()         # e.g. cookie banners / "load more" buttons (best effort)
     block_resources: bool = True                  # skip images/fonts/media to save proxy bandwidth
+    follow_links: bool = True                     # auto mode: visit product links found on listing pages
 
     # --- politeness -------------------------------------------------------
     max_concurrent_requests: int = 2              # per-domain concurrency cap
@@ -124,8 +125,8 @@ class SiteConfig:
             raise ConfigError("'start_urls' must contain at least one URL")
 
         mode = str(raw.get("mode", "selectors")).strip().lower()
-        if mode not in ("selectors", "auto"):
-            raise ConfigError("'mode' must be 'selectors' or 'auto'")
+        if mode not in ("selectors", "auto", "shopify"):
+            raise ConfigError("'mode' must be 'selectors', 'auto' or 'shopify'")
 
         fields: dict[str, SelectorSpec | None] = {}
         if mode == "selectors":
@@ -156,6 +157,7 @@ class SiteConfig:
             scroll_pause_ms=max(0, int(raw.get("scroll_pause_ms", 1000))),
             click_selectors=tuple(raw.get("click_selectors") or ()),
             block_resources=bool(raw.get("block_resources", True)),
+            follow_links=bool(raw.get("follow_links", True)),
             max_concurrent_requests=max(1, int(raw.get("max_concurrent_requests", 2))),
             min_delay_seconds=max(0.0, float(raw.get("min_delay_seconds", 1.0))),
             enabled=bool(raw.get("enabled", True)),
@@ -203,9 +205,17 @@ def load_site_configs(source: str | Path | list[dict[str, Any]]) -> list[SiteCon
 
 def load_sites_txt(path: str | Path) -> list[SiteConfig]:
     """
-    Read a plain-text list of URLs (one per line) and turn them into "auto" sites that need
-    no CSS selectors. Lines starting with # are comments. Add " | js" after a URL to render
-    that site's pages in a headless browser. URLs on the same domain are grouped into one site.
+    Read a plain-text list of URLs (one per line) and turn them into sites that need no CSS
+    selectors. Lines starting with # are comments. Options go after the address, separated by |
+
+        https://shop.com/products/dog-bed                 read one product page automatically
+        https://shop.com | shopify                        read the shop's product feed (250 products per request)
+        https://shop.com | shopify | pages=8 | currency=USD
+        https://shop.com/products/x | direct              skip the paid proxy for this shop
+        https://shop.com/collections/dogs | nofollow      read the listing page only, don't open each product
+        https://shop.com/products/x | js                  render pages in a headless browser
+
+    URLs on the same domain are grouped into one site.
     """
     file = Path(path)
     if not file.exists():
@@ -217,31 +227,61 @@ def load_sites_txt(path: str | Path) -> list[SiteConfig]:
         if not line or line.startswith("#"):
             continue
         parts = [part.strip() for part in line.split("|")]
-        url, flags = parts[0], {part.lower() for part in parts[1:]}
+        url = parts[0]
         if not re.match(r"^https?://", url, re.IGNORECASE):
             url = "https://" + url
-        host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
         if "." not in host:
             logger.error("%s line %d: %r is not a valid web address; skipping", file, lineno, line)
             continue
-        group = groups.setdefault(host, {"urls": [], "js": False})
+
+        group = groups.setdefault(host, {
+            "urls": [], "origin": f"{parsed.scheme}://{parsed.netloc}", "js": False, "direct": False,
+            "nofollow": False, "shopify": False, "pages": None, "currency": None,
+        })
         if url not in group["urls"]:
             group["urls"].append(url)
-        group["js"] = group["js"] or ("js" in flags)
 
-    raw_sites = [
-        {
-            "name": "auto_" + re.sub(r"[^a-z0-9]+", "_", host),
+        for part in parts[1:]:
+            flag = part.lower()
+            if flag == "js":
+                group["js"] = True
+            elif flag == "direct":
+                group["direct"] = True
+            elif flag == "nofollow":
+                group["nofollow"] = True
+            elif flag == "shopify":
+                group["shopify"] = True
+            elif re.fullmatch(r"pages=\d+", flag):
+                group["pages"] = max(1, int(flag.split("=", 1)[1]))
+            elif re.fullmatch(r"currency=[a-z]{3}", flag):
+                group["currency"] = flag.split("=", 1)[1].upper()
+            elif flag:
+                logger.warning("%s line %d: unknown option %r ignored", file, lineno, part)
+
+    raw_sites = []
+    for host, group in groups.items():
+        slug = re.sub(r"[^a-z0-9]+", "_", host)
+        if group["shopify"]:
+            if len(group["urls"]) > 1:
+                logger.info("%s: shopify mode reads the product feed, so its other addresses are ignored", host)
+            start_urls = [f"{group['origin']}/products.json?limit=250&page=1"]
+        else:
+            start_urls = group["urls"]
+        raw_sites.append({
+            "name": ("shopify_" if group["shopify"] else "auto_") + slug,
             "domain": host,
-            "start_urls": group["urls"],
-            "mode": "auto",
+            "start_urls": start_urls,
+            "mode": "shopify" if group["shopify"] else "auto",
             "render_javascript": group["js"],
-            "max_pages": 3,
+            "use_proxy": not group["direct"],
+            "follow_links": not group["nofollow"],
+            "currency": group["currency"],
+            "max_pages": group["pages"] or (4 if group["shopify"] else 3),
             "min_delay_seconds": 1.5,
             "max_concurrent_requests": 2,
-        }
-        for host, group in groups.items()
-    ]
+        })
     return load_site_configs(raw_sites)
 
 
