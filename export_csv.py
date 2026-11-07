@@ -6,15 +6,22 @@ Cleans the latest scrape, then saves:
 
 Cleaning rules: drop rows with no name or no usable price, remove duplicates, tidy text,
 standardise currency and stock labels, and FLAG (never silently change) suspicious prices.
+
+Currency: the original price and currency are always kept. The script also adds
+price_usd, usd_rate (USD per 1 unit of the original currency) and rate_date, using free
+European Central Bank reference rates from the Frankfurter service. If the rate lookup fails,
+those columns stay blank and the rows are flagged; the run never crashes.
 """
 import csv
 import html as html_lib
+import json
 import os
 import re
 import sqlite3
 import statistics
 import sys
 import unicodedata
+import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -24,8 +31,8 @@ LATEST = os.path.join(OUT_DIR, "products.csv")
 HISTORY = os.path.join(OUT_DIR, "history.csv")
 REJECTED = os.path.join(OUT_DIR, "rejected.csv")
 
-COLUMNS = ["site", "product_name", "price", "currency", "sku", "availability",
-           "image_url", "product_url", "scraped_at", "review_reason"]
+COLUMNS = ["site", "product_name", "price", "currency", "price_usd", "usd_rate", "rate_date",
+           "sku", "availability", "image_url", "product_url", "scraped_at", "review_reason"]
 REJECT_COLUMNS = ["reason", "site", "product_name", "price", "sku", "product_url", "scraped_at"]
 
 OUTLIER_FACTOR = 10     # flag prices more than 10x above / below the site's median price
@@ -68,6 +75,40 @@ def stock_label(value):
     return {1: "In stock", 0: "Out of stock"}.get(value, "Unknown")
 
 
+# Tried in order; the first one that answers is used.
+RATE_URLS = [
+    "https://api.frankfurter.dev/v1/latest?base=USD&symbols={code}",
+    "https://api.frankfurter.dev/v1/latest?from=USD&to={code}",
+    "https://api.frankfurter.app/latest?from=USD&to={code}",
+]
+
+
+def fetch_json(url, timeout=15):
+    request = urllib.request.Request(url, headers={"User-Agent": "product-scraper/1.0"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def get_usd_rates(currencies):
+    """Return ({currency: USD per 1 unit}, {currency: rate date}). Missing = lookup failed."""
+    rates, dates = {"USD": 1.0}, {}
+    for code in sorted(c for c in currencies if c and c != "USD"):
+        for template in RATE_URLS:
+            try:
+                data = fetch_json(template.format(code=code))
+                per_usd = float(data["rates"][code])          # units of `code` per 1 USD
+                if per_usd <= 0:
+                    raise ValueError("non-positive rate")
+                rates[code] = round(1.0 / per_usd, 6)
+                dates[code] = str(data.get("date", ""))
+                break
+            except Exception as exc:                          # network down, unsupported currency, ...
+                print(f"Rate lookup for {code} failed ({template.split('?')[0]}): {exc!r}")
+        else:
+            print(f"No USD exchange rate found for {code}; its price_usd will be blank")
+    return rates, dates
+
+
 conn = sqlite3.connect(DB)
 raw = conn.execute(
     """SELECT site, product_name, price, currency, sku, availability,
@@ -95,6 +136,9 @@ for site, name, price, currency, sku, availability, image, url, scraped_at in ra
         "product_name": fix_caps(clean_text(name)),
         "price": price,
         "currency": clean_currency(currency),
+        "price_usd": "",
+        "usd_rate": "",
+        "rate_date": "",
         "sku": clean_text(sku),
         "availability": stock_label(availability),
         "image_url": clean_url(image),
@@ -139,6 +183,17 @@ for site_rows in by_site.values():
 for row in rows:
     if not row["currency"]:
         row["review_reason"] = "; ".join(filter(None, [row["review_reason"], "missing currency"]))
+
+# 3b) Convert prices to USD (the original price and currency are kept untouched)
+usd_rates, usd_dates = get_usd_rates({row["currency"] for row in rows})
+for row in rows:
+    code = row["currency"]
+    if code in usd_rates:
+        row["usd_rate"] = usd_rates[code]
+        row["price_usd"] = round(row["price"] * usd_rates[code], 2)
+        row["rate_date"] = usd_dates.get(code, "")
+    elif code:
+        row["review_reason"] = "; ".join(filter(None, [row["review_reason"], "no USD rate"]))
 
 # 4) Save the rejected-rows report (always, so you can see what was removed)
 with open(REJECTED, "w", newline="", encoding="utf-8-sig") as f:
