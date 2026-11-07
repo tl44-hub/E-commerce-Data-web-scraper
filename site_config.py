@@ -295,6 +295,7 @@ SAMPLE_SITE_CONFIGS: list[dict[str, Any]] = [
     # books.toscrape.com is a public scraping sandbox, so it needs no proxy.
     {
         "name": "books_toscrape",
+                "enabled": False,
         "domain": "books.toscrape.com",
         "start_urls": ["https://books.toscrape.com/catalogue/page-1.html"],
         "render_javascript": False,
@@ -319,6 +320,7 @@ SAMPLE_SITE_CONFIGS: list[dict[str, Any]] = [
     # --- Practice laptop store (static) -------------------------------------
     {
         "name": "webscraper_test_store",
+                "enabled": False,
         "domain": "webscraper.io",
         "start_urls": [
             "https://webscraper.io/test-sites/e-commerce/static/computers/laptops"
