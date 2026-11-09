@@ -12,3 +12,5 @@
 # https://www.example-shop.com/products/blue-widget
 # https://www.example-shop.com/products/red-widget
 https://www.petmax.ca | shopify | currency=CAD | pages=2 | direct
+https://www.canvasbackpets.com | shopify | currency=CAD | pages=4 | direct
+https://ashariopets.ca | shopify | currency=CAD | pages=4 | direct
