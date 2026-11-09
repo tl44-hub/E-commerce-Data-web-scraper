@@ -3,7 +3,7 @@ name: Run scraper
 on:
   workflow_dispatch:        # lets you press a Start button
   schedule:
-    - cron: "0 6 * * *"     # also runs by itself every day
+   - cron: "0 6 * * 1"     # also runs by itself every day
 
 permissions:
   contents: write           # lets the robot save files into your repository
