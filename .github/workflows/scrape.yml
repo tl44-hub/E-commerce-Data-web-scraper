@@ -39,7 +39,10 @@ jobs:
         if: always()
         continue-on-error: true
         run: python export_csv.py
-
+         - name: Build the sellable data files
+        if: always()
+        continue-on-error: true
+        run: python build_dataset.py
       - name: Save history to the repository
         if: always()
         run: |
