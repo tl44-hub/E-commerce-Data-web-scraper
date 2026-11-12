@@ -1,13 +1,13 @@
 {
   "dataset": "Pet Supplies Price & Stock Data",
-  "generated_at": "2026-11-11 23:53 UTC",
+  "generated_at": "2026-11-12 03:22 UTC",
   "update_frequency": "Weekly",
   "shops": [
     {
       "shop": "ashariopets.ca",
       "products": 1462,
-      "in_stock": 1224,
-      "out_of_stock": 238,
+      "in_stock": 1218,
+      "out_of_stock": 244,
       "unknown_stock": 0,
       "currencies": [
         "CAD"
@@ -38,9 +38,10 @@
     }
   ],
   "latest_rows": 3210,
+  "products_matched_across_shops": 21,
   "flagged_rows": 35,
-  "history_rows": 6108,
-  "history_snapshots": 12,
+  "history_rows": 9318,
+  "history_snapshots": 13,
   "history_first_date": "2026-10-30",
-  "history_last_date": "2026-11-11"
+  "history_last_date": "2026-11-12"
 }
