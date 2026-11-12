@@ -36,7 +36,10 @@ jobs:
         if: always()
         continue-on-error: true
         run: python export_csv.py
-
+      - name: Match products across shops
+        if: always()
+        continue-on-error: true
+        run: python match_products.py
       - name: Build the sellable data files
         if: always()
         continue-on-error: true
