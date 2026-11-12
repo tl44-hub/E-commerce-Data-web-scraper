@@ -1,0 +1,3 @@
+url_a,url_b,decision
+https://shop-a.com/products/x,https://shop-b.com/products/y,same
+https://shop-a.com/products/p,https://shop-b.com/products/q,different
