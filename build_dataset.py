@@ -1,10 +1,12 @@
 """
 Packages the cleaned scrape into files you can list on a data marketplace.
 
-Reads  data/products.csv and data/history.csv   (made by export_csv.py)
+Reads  data/matched_products.csv and data/matched_history.csv   (made by match_products.py)
+       (falls back to data/products.csv and data/history.csv if matching has not run)
 Writes data/dataset/
     latest_prices.csv     the newest snapshot, one row per product (or size/variant)
     price_history.csv     every weekly snapshot stacked together, with a run_date column
+    price_comparison.csv  products sold by 2+ shops, side by side (only if matching has run)
     sample.csv            a small, evenly spread free sample for marketplace listings
     README.md             description, coverage, column dictionary and limitations
     dataset_summary.json  the same coverage numbers in machine-readable form
@@ -28,14 +30,19 @@ SAMPLE_SIZE = 100
 
 IN_DIR = "data"
 OUT_DIR = os.path.join(IN_DIR, "dataset")
-LATEST_IN = os.path.join(IN_DIR, "products.csv")
-HISTORY_IN = os.path.join(IN_DIR, "history.csv")
+MATCHED_LATEST = os.path.join(IN_DIR, "matched_products.csv")
+MATCHED_HISTORY = os.path.join(IN_DIR, "matched_history.csv")
+COMPARISON_IN = os.path.join(IN_DIR, "price_comparison.csv")
+LATEST_IN = MATCHED_LATEST if os.path.exists(MATCHED_LATEST) else os.path.join(IN_DIR, "products.csv")
+HISTORY_IN = MATCHED_HISTORY if os.path.exists(MATCHED_HISTORY) else os.path.join(IN_DIR, "history.csv")
 
-COLUMNS = ["shop", "product_name", "price", "currency", "price_usd", "usd_rate", "rate_date",
-           "sku", "availability", "product_url", "image_url", "scraped_at", "quality_flag"]
+COLUMNS = ["shop", "product_group_id", "product_name", "price", "currency", "price_usd", "usd_rate",
+           "rate_date", "sku", "availability", "product_url", "image_url", "scraped_at",
+           "match_confidence", "match_method", "quality_flag"]
 
 COLUMN_HELP = {
     "shop": "The shop's web domain (for example petmax.ca).",
+    "product_group_id": "Identifier shared by the same product at different shops. Rows with the same id are the same product. A product found at only one shop has an id of its own.",
     "product_name": "Product name as shown by the shop. Items sold in several sizes or flavours have one row per size or flavour.",
     "price": "Price in the shop's own currency, exactly as listed.",
     "currency": "3-letter currency code of `price` (for example CAD). Blank if the shop did not state one.",
@@ -47,6 +54,8 @@ COLUMN_HELP = {
     "product_url": "Link to the product page on the shop's website.",
     "image_url": "Link to the product image on the shop's website (a link only; no image files are included).",
     "scraped_at": "When the row was collected (UTC).",
+    "match_confidence": "How sure the matching is, from 0.70 to 1.00 (1.00 = barcode or identical name and size). Blank when the product was found at only one shop.",
+    "match_method": "How the match was made: barcode, name+size, name, or manual. Blank when unmatched.",
     "quality_flag": "Blank for normal rows. Otherwise a note such as `price outlier` or `missing currency` meaning the row deserves a second look.",
     "run_date": "(price_history.csv only) The date of the weekly snapshot the row belongs to.",
 }
@@ -118,6 +127,15 @@ def main():
     write_csv(os.path.join(OUT_DIR, "latest_prices.csv"), COLUMNS, latest)
     write_csv(os.path.join(OUT_DIR, "price_history.csv"), ["run_date"] + COLUMNS, history)
 
+    comparison_rows = []
+    if os.path.exists(COMPARISON_IN):
+        comparison_rows = read_csv(COMPARISON_IN)
+        with open(COMPARISON_IN, newline="", encoding="utf-8-sig") as src:
+            fieldnames = csv.DictReader(src).fieldnames or []
+        write_csv(os.path.join(OUT_DIR, "price_comparison.csv"), fieldnames, comparison_rows)
+    matched_groups = len({r["product_group_id"] for r in latest
+                          if r.get("product_group_id") and r.get("match_method")})
+
     clean_rows = [r for r in latest if not r["quality_flag"]] or latest
     sample = evenly_spaced_sample(clean_rows, SAMPLE_SIZE)
     write_csv(os.path.join(OUT_DIR, "sample.csv"), COLUMNS, sample)
@@ -147,6 +165,7 @@ def main():
         "update_frequency": UPDATE_FREQUENCY,
         "shops": shops,
         "latest_rows": len(latest),
+        "products_matched_across_shops": matched_groups,
         "flagged_rows": flagged,
         "history_rows": len(history),
         "history_snapshots": len(run_dates),
@@ -171,6 +190,7 @@ and cleaned into one consistent table.
 - **Update frequency:** {UPDATE_FREQUENCY}
 - **Shops covered:** {len(shops)}
 - **Products in the latest snapshot:** {len(latest)}
+- **Products found at 2 or more shops:** {matched_groups}
 - **History covered:** {span}
 
 ## Files
@@ -179,6 +199,7 @@ and cleaned into one consistent table.
 |---|---|
 | `latest_prices.csv` | The newest snapshot, one row per product (or size/variant). |
 | `price_history.csv` | Every snapshot so far, so price and stock changes can be tracked over time. |
+| `price_comparison.csv` | Products sold by 2 or more shops, side by side in US dollars, with the cheapest shop and the price spread. |
 | `sample.csv` | A free sample of up to {SAMPLE_SIZE} rows spread across all shops. |
 | `dataset_summary.json` | The coverage numbers below in machine-readable form. |
 
@@ -198,6 +219,7 @@ and cleaned into one consistent table.
 
 - Collected automatically from the shops' public web pages or public product feeds.
 - Rows with no product name or no usable price are removed; duplicates are removed.
+- The same product at different shops is linked with a shared `product_group_id`.
 - Text is tidied (extra spaces, stray characters), and currency and stock labels are standardised.
 - Suspicious rows are **kept but flagged** in `quality_flag` rather than silently changed. {flagged} row(s) are flagged in the latest snapshot.
 - US dollar prices use daily European Central Bank reference rates (via the Frankfurter service). They are indicative, not the rate any bank or card would charge.
@@ -206,7 +228,8 @@ and cleaned into one consistent table.
 
 - Each file is a **snapshot**. Prices and stock can change between updates.
 - Coverage is limited to the shops listed above, and may not include a shop's entire catalogue.
-- The same product is named differently by different shops, so products are **not matched across shops** in this version.
+- Matching the same product across shops is automatic (barcode, then product name and size). It is cautious, so some genuine matches are missed, and a few may be wrong. Use `match_confidence` to judge each one; products are only matched when the size, animal, life stage and flavour agree.
+- `product_group_id` is stable while a product's listing stays the same, but can change if a shop renames or removes it.
 - Some shops leave the SKU empty.
 - Not affiliated with or endorsed by any of the shops listed.
 
