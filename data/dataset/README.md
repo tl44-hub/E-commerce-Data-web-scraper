@@ -3,12 +3,12 @@
 Prices and stock status for pet products, collected from the public websites of online pet shops
 and cleaned into one consistent table.
 
-- **Last built:** 2026-11-12 03:22 UTC
+- **Last built:** 2026-11-16 08:26 UTC
 - **Update frequency:** Weekly
 - **Shops covered:** 3
-- **Products in the latest snapshot:** 3210
+- **Products in the latest snapshot:** 3203
 - **Products found at 2 or more shops:** 21
-- **History covered:** 2026-10-30 to 2026-11-12 (13 snapshot(s))
+- **History covered:** 2026-10-30 to 2026-11-16 (14 snapshot(s))
 
 ## Files
 
@@ -24,9 +24,9 @@ and cleaned into one consistent table.
 
 | Shop | Products | In stock | Out of stock | Currency |
 |---|---|---|---|---|
-| ashariopets.ca | 1462 | 1218 | 244 | CAD |
-| canvasbackpets.com | 1000 | 784 | 216 | CAD |
-| petmax.ca | 748 | 643 | 105 | CAD |
+| ashariopets.ca | 1457 | 1182 | 275 | CAD |
+| canvasbackpets.com | 1000 | 800 | 200 | CAD |
+| petmax.ca | 746 | 640 | 106 | CAD |
 
 ## Columns
 
@@ -56,7 +56,7 @@ and cleaned into one consistent table.
 - Rows with no product name or no usable price are removed; duplicates are removed.
 - The same product at different shops is linked with a shared `product_group_id`.
 - Text is tidied (extra spaces, stray characters), and currency and stock labels are standardised.
-- Suspicious rows are **kept but flagged** in `quality_flag` rather than silently changed. 35 row(s) are flagged in the latest snapshot.
+- Suspicious rows are **kept but flagged** in `quality_flag` rather than silently changed. 49 row(s) are flagged in the latest snapshot.
 - US dollar prices use daily European Central Bank reference rates (via the Frankfurter service). They are indicative, not the rate any bank or card would charge.
 
 ## Known limitations
