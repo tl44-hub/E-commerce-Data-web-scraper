@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS products (
     availability  INTEGER,          -- 1 in stock, 0 out of stock, NULL unknown
     image_url     TEXT,
     product_url   TEXT,
+    brand         TEXT,
+    mpn           TEXT,
+    gtin          TEXT,
     source_url    TEXT,
     scraped_at    TEXT,
     UNIQUE (site, dedupe_key)
@@ -50,9 +53,13 @@ CREATE INDEX IF NOT EXISTS idx_errors_site_field ON field_errors (site, field);
 """
 
 _COLUMNS = ("site", "dedupe_key", "product_name", "price", "currency", "sku",
-            "availability", "image_url", "product_url", "source_url", "scraped_at")
+            "availability", "image_url", "product_url", "brand", "mpn", "gtin",
+            "source_url", "scraped_at")
 _PRESERVE_ON_NULL = ("product_name", "price", "currency", "sku", "availability",
-                     "image_url", "product_url")
+                     "image_url", "product_url", "brand", "mpn", "gtin")
+
+# Columns added after the first release; older database files get them automatically.
+_ADDED_COLUMNS = {"brand": "TEXT", "mpn": "TEXT", "gtin": "TEXT"}
 
 _UPSERT_SQL = (
     f"INSERT INTO products ({', '.join(_COLUMNS)}) "
@@ -81,6 +88,11 @@ class SQLiteSink:
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA synchronous=NORMAL")
         await self._db.executescript(_SCHEMA)
+        cursor = await self._db.execute("PRAGMA table_info(products)")
+        existing = {row[1] for row in await cursor.fetchall()}
+        for column, kind in _ADDED_COLUMNS.items():
+            if column not in existing:
+                await self._db.execute(f"ALTER TABLE products ADD COLUMN {column} {kind}")
         await self._db.commit()
         return self
 
