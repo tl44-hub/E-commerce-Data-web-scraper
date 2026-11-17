@@ -124,6 +124,9 @@ _NORMALISERS = {
     "availability": _norm_availability,
     "image_url": _norm_url,
     "product_url": _norm_url,
+    "brand": _norm_text,
+    "mpn": _norm_text,
+    "gtin": _norm_text,
 }
 
 
@@ -303,6 +306,15 @@ def _offer_price(offer: dict):
     return None
 
 
+def _brand_name(value) -> str | None:
+    """schema.org brand/manufacturer can be text, an object with a name, or a list of either."""
+    if isinstance(value, list):
+        value = next((v for v in value if v), None)
+    if isinstance(value, dict):
+        value = value.get("name")
+    return _clean(value)
+
+
 def _first_image(value) -> str | None:
     if isinstance(value, list):
         for item in value:
@@ -355,6 +367,14 @@ def _record_from_product(product: dict, page_url: str, site: SiteConfig,
     record["currency"] = _clean(offer.get("priceCurrency")) or site.currency
     record["availability"] = _availability_from_schema(offer.get("availability"))
 
+    # Manufacturer identity (used by the industrial parts pipeline)
+    record["brand"] = _brand_name(product.get("brand")) or _brand_name(product.get("manufacturer"))
+    record["mpn"] = _clean(product.get("mpn"))
+    for key in ("gtin", "gtin13", "gtin14", "gtin12", "gtin8"):
+        record["gtin"] = _clean(product.get(key))
+        if record["gtin"]:
+            break
+
     failures = [(name, _AUTO_LABEL, "not present in the page's structured data")
                 for name in REQUIRED_FIELDS if record[name] is None]
     return record, failures
@@ -379,6 +399,7 @@ def _record_from_meta(soup: BeautifulSoup, page_url: str, site: SiteConfig):
     image = _meta_content(soup, "og:image")
     record["image_url"] = urljoin(page_url, image) if image else None
     record["product_url"] = urljoin(page_url, _meta_content(soup, "og:url") or page_url)
+    record["brand"] = _clean(_meta_content(soup, "product:brand", "og:brand"))
     try:
         record["price"] = _norm_price(amount, page_url)
     except FieldExtractionError:
@@ -491,6 +512,7 @@ def _extract_shopify(text: str, site: SiteConfig, page_url: str) -> tuple[_Extra
             else:
                 record["product_name"] = title
             record["sku"] = _clean(variant.get("sku"))
+            record["brand"] = _clean(product.get("vendor"))
 
             image = _clean(image_by_id.get(variant.get("image_id"))) or first_image
             record["image_url"] = urljoin(page_url, image) if image else None
