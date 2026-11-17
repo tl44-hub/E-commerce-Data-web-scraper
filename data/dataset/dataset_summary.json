@@ -1,13 +1,13 @@
 {
   "dataset": "Pet Supplies Price & Stock Data",
-  "generated_at": "2026-11-16 08:26 UTC",
+  "generated_at": "2026-11-17 21:58 UTC",
   "update_frequency": "Weekly",
   "shops": [
     {
       "shop": "ashariopets.ca",
       "products": 1457,
-      "in_stock": 1182,
-      "out_of_stock": 275,
+      "in_stock": 1197,
+      "out_of_stock": 260,
       "unknown_stock": 0,
       "currencies": [
         "CAD"
@@ -15,33 +15,55 @@
       "median_price": 15.99
     },
     {
+      "shop": "books.toscrape.com",
+      "products": 60,
+      "in_stock": 60,
+      "out_of_stock": 0,
+      "unknown_stock": 0,
+      "currencies": [
+        "GBP"
+      ],
+      "median_price": 33.48
+    },
+    {
       "shop": "canvasbackpets.com",
-      "products": 1000,
-      "in_stock": 800,
-      "out_of_stock": 200,
+      "products": 1029,
+      "in_stock": 814,
+      "out_of_stock": 215,
       "unknown_stock": 0,
       "currencies": [
         "CAD"
       ],
-      "median_price": 29.99
+      "median_price": 30.99
     },
     {
       "shop": "petmax.ca",
       "products": 746,
-      "in_stock": 640,
-      "out_of_stock": 106,
+      "in_stock": 643,
+      "out_of_stock": 103,
       "unknown_stock": 0,
       "currencies": [
         "CAD"
       ],
       "median_price": 19.99
+    },
+    {
+      "shop": "webscraper.io",
+      "products": 18,
+      "in_stock": 0,
+      "out_of_stock": 0,
+      "unknown_stock": 18,
+      "currencies": [
+        "USD"
+      ],
+      "median_price": 644.5
     }
   ],
-  "latest_rows": 3203,
+  "latest_rows": 3310,
   "products_matched_across_shops": 21,
-  "flagged_rows": 49,
-  "history_rows": 12521,
-  "history_snapshots": 14,
+  "flagged_rows": 81,
+  "history_rows": 15831,
+  "history_snapshots": 15,
   "history_first_date": "2026-10-30",
-  "history_last_date": "2026-11-16"
+  "history_last_date": "2026-11-17"
 }
