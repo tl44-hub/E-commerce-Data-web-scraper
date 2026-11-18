@@ -43,7 +43,7 @@ def proxy_settings_from_env() -> ProxySettings:
 
 
 async def run(args: argparse.Namespace) -> None:
-    sites = load_site_configs(args.config if args.config else SAMPLE_SITE_CONFIGS)
+    sites = [] if args.no_manual else load_site_configs(args.config if args.config else SAMPLE_SITE_CONFIGS)
 
     # Sites listed as plain URLs in sites.txt are read automatically (no selectors needed).
     # A site configured by hand above always wins over a sites.txt entry for the same domain.
@@ -73,6 +73,8 @@ async def run(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Config-driven product scraper")
     parser.add_argument("--config", help="Path to a JSON file of site configs (default: built-in samples)")
+    parser.add_argument("--no-manual", action="store_true",
+                        help="Ignore the hand-written sites in site_config.py; use only --sites-file")
     parser.add_argument("--sites-file", default="sites.txt", help="Plain list of URLs to read automatically")
     parser.add_argument("--db", default="products.db", help="SQLite output path")
     parser.add_argument("--workers", type=int, default=20, help="Worker tasks pulling from the queue")
