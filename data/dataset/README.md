@@ -3,12 +3,12 @@
 Prices and stock status for pet products, collected from the public websites of online pet shops
 and cleaned into one consistent table.
 
-- **Last built:** 2026-11-17 21:58 UTC
+- **Last built:** 2026-11-18 03:25 UTC
 - **Update frequency:** Weekly
 - **Shops covered:** 5
 - **Products in the latest snapshot:** 3310
 - **Products found at 2 or more shops:** 21
-- **History covered:** 2026-10-30 to 2026-11-17 (15 snapshot(s))
+- **History covered:** 2026-10-30 to 2026-11-18 (16 snapshot(s))
 
 ## Files
 
@@ -24,9 +24,9 @@ and cleaned into one consistent table.
 
 | Shop | Products | In stock | Out of stock | Currency |
 |---|---|---|---|---|
-| ashariopets.ca | 1457 | 1197 | 260 | CAD |
+| ashariopets.ca | 1457 | 1193 | 264 | CAD |
 | books.toscrape.com | 60 | 60 | 0 | GBP |
-| canvasbackpets.com | 1029 | 814 | 215 | CAD |
+| canvasbackpets.com | 1029 | 813 | 216 | CAD |
 | petmax.ca | 746 | 643 | 103 | CAD |
 | webscraper.io | 18 | 0 | 0 | USD |
 

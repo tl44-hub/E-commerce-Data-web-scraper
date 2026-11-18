@@ -1,13 +1,13 @@
 {
   "dataset": "Pet Supplies Price & Stock Data",
-  "generated_at": "2026-11-17 21:58 UTC",
+  "generated_at": "2026-11-18 03:25 UTC",
   "update_frequency": "Weekly",
   "shops": [
     {
       "shop": "ashariopets.ca",
       "products": 1457,
-      "in_stock": 1197,
-      "out_of_stock": 260,
+      "in_stock": 1193,
+      "out_of_stock": 264,
       "unknown_stock": 0,
       "currencies": [
         "CAD"
@@ -28,8 +28,8 @@
     {
       "shop": "canvasbackpets.com",
       "products": 1029,
-      "in_stock": 814,
-      "out_of_stock": 215,
+      "in_stock": 813,
+      "out_of_stock": 216,
       "unknown_stock": 0,
       "currencies": [
         "CAD"
@@ -62,8 +62,8 @@
   "latest_rows": 3310,
   "products_matched_across_shops": 21,
   "flagged_rows": 81,
-  "history_rows": 15831,
-  "history_snapshots": 15,
+  "history_rows": 19141,
+  "history_snapshots": 16,
   "history_first_date": "2026-10-30",
-  "history_last_date": "2026-11-17"
+  "history_last_date": "2026-11-18"
 }
